@@ -63,7 +63,7 @@ func fetchPage(doneChan chan bool, offsetChan <-chan uint, entryChan chan []Entr
 	}
 }
 
-const Pool = 20
+const Pool = 50 // number of fetchers to launch
 
 func main() {
 	doneChan := make(chan bool, Pool)
