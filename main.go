@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -25,8 +27,8 @@ type Entry struct {
 }
 
 type Account struct {
-	Entries uint  // 'line_count'
-	Total   int64 // sum of amounts
+	Entries uint  `json:"line_count"`
+	Total   int64 `json:"total_amount"`
 }
 
 func fetchPage(doneChan chan bool, offsetChan <-chan uint, entryChan chan []Entry) {
@@ -37,7 +39,7 @@ func fetchPage(doneChan chan bool, offsetChan <-chan uint, entryChan chan []Entr
 	c := &http.Client{}
 	for offset := range offsetChan {
 		log.Printf("fetching offset %d", offset)
-		res, err := c.Get(fmt.Sprintf("https://t1.numeric.codes/data/lines?page_size=20&offset=%d&token=%s", offset, Token))
+		res, err := c.Get(fmt.Sprintf("https://t1.numeric.codes/data/lines?offset=%d&token=%s", offset, Token))
 		if err != nil {
 			log.Fatalf("Server appears to be down: %s", err)
 		}
@@ -50,14 +52,15 @@ func fetchPage(doneChan chan bool, offsetChan <-chan uint, entryChan chan []Entr
 			log.Fatalf("Json appears to be corrupt: %s", err)
 		}
 
-		log.Printf("forwarding result data")
 		if len(result.Data) > 0 {
+			log.Printf("forwarding result data")
+			for _, d := range result.Data {
+				log.Printf("offset: %d, ID: %s, acct ID: %s, Amount: %d", offset, d.Id, d.AccountID, d.Amount)
+			}
 			entryChan <- result.Data
-		} else {
-			// the has_more parameter lies; there are 110 pages at 20 offset with
-			// data but everything past 90 or so has it set to false. I'm going to
-			// assume this parameter isn't useful.
-			// this means these routines, pooled, are going to overshoot max offset once apiece.
+		}
+
+		if !result.Page.HasMore {
 			return
 		}
 	}
@@ -73,6 +76,8 @@ func main() {
 	accounts := map[string]*Account{}
 	done := 0
 
+	ids := map[string]struct{}{}
+
 	offset := uint(0)
 	for i := 0; i < Pool; i++ {
 		go fetchPage(doneChan, offsetChan, entryChan)
@@ -85,6 +90,15 @@ func main() {
 		select {
 		case entries := <-entryChan:
 			for _, entry := range entries {
+				log.Printf("received id: %s, ID: %s, Amount: %d", entry.Id, entry.AccountID, entry.Amount)
+
+				if _, ok := ids[entry.Id]; ok {
+					log.Printf("ID %s is repeat; skipping", entry.Id)
+					continue
+				} else {
+					ids[entry.Id] = struct{}{}
+				}
+
 				var account *Account
 				if res, ok := accounts[entry.AccountID]; ok {
 					account = res
@@ -103,9 +117,24 @@ func main() {
 			done++
 			log.Printf("done count: %d", done)
 			if done >= Pool {
-				e := json.NewEncoder(os.Stdout)
-				e.SetIndent("", "\t")
-				e.Encode(accounts)
+				j, err := json.Marshal(map[string]map[string]*Account{"result": accounts})
+				if err != nil {
+					log.Fatalf("Error marshaling: %s", err)
+				}
+
+				fmt.Println(string(j))
+
+				httpRes, err := http.Post(fmt.Sprintf("https://t1.numeric.codes/schedule/puzzle?token=%s", Token), "application/json", bytes.NewBuffer(j))
+				if err != nil {
+					log.Fatalf("Error posting: %s", err)
+				} else if httpRes.StatusCode != 200 {
+					io.Copy(os.Stdout, httpRes.Body)
+					fmt.Println()
+					log.Fatalf("Bad status: %s", httpRes.Status)
+				} else {
+					io.Copy(os.Stdout, httpRes.Body)
+				}
+
 				return
 			}
 		}
