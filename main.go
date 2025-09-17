@@ -90,13 +90,13 @@ func main() {
 					account = res
 				} else {
 					account = &Account{}
+					accounts[entry.AccountID] = account
 				}
 
 				account.Entries++
 				account.Total += entry.Amount
-
-				accounts[entry.AccountID] = account
 			}
+
 			offset++
 			offsetChan <- offset
 		case <-doneChan:
