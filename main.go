@@ -102,7 +102,7 @@ func main() {
 		case <-doneChan:
 			done++
 			log.Printf("done count: %d", done)
-			if done >= Pool-1 {
+			if done >= Pool {
 				e := json.NewEncoder(os.Stdout)
 				e.SetIndent("", "\t")
 				e.Encode(accounts)
