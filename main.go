@@ -39,7 +39,7 @@ func fetchPage(doneChan chan bool, offsetChan <-chan uint, entryChan chan []Entr
 	c := &http.Client{}
 	for offset := range offsetChan {
 		log.Printf("fetching offset %d", offset)
-		res, err := c.Get(fmt.Sprintf("https://t1.numeric.codes/data/lines?offset=%d&token=%s", offset, Token))
+		res, err := c.Get(fmt.Sprintf("https://t1.numeric.codes/data/lines?page_size=1&offset=%d&token=%s", offset, Token))
 		if err != nil {
 			log.Fatalf("Server appears to be down: %s", err)
 		}
