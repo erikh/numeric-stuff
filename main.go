@@ -76,8 +76,6 @@ func main() {
 	accounts := map[string]*Account{}
 	done := 0
 
-	ids := map[string]struct{}{}
-
 	offset := uint(0)
 	for i := 0; i < Pool; i++ {
 		go fetchPage(doneChan, offsetChan, entryChan)
@@ -91,13 +89,6 @@ func main() {
 		case entries := <-entryChan:
 			for _, entry := range entries {
 				log.Printf("received id: %s, ID: %s, Amount: %d", entry.Id, entry.AccountID, entry.Amount)
-
-				if _, ok := ids[entry.Id]; ok {
-					log.Printf("ID %s is repeat; skipping", entry.Id)
-					continue
-				} else {
-					ids[entry.Id] = struct{}{}
-				}
 
 				var account *Account
 				if res, ok := accounts[entry.AccountID]; ok {
