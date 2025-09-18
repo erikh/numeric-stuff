@@ -102,8 +102,8 @@ func main() {
 				account.Total += entry.Amount
 			}
 
-			offset++
 			offsetChan <- offset
+			offset++
 		case <-doneChan:
 			done++
 			log.Printf("done count: %d", done)
